@@ -2,6 +2,8 @@
 
 A browser-based, real-time text chat application that establishes peer-to-peer communication through WebRTC DataChannels. A lightweight C# WebSocket signaling server coordinates the initial connection; messages are then exchanged directly between peers.
 
+> **Türkçe özet:** WebRTC DataChannel ile tarayıcılar arasında doğrudan (P2P) metin mesajlaşması sağlayan gerçek zamanlı sohbet uygulaması. C# WebSocket signaling sunucusu yalnızca bağlantının kurulmasını koordine eder.
+
 ## Highlights
 
 - WebRTC `RTCPeerConnection` and `RTCDataChannel` integration
@@ -18,6 +20,8 @@ Browser A ── WebSocket signaling ── C# Signaling Server ── WebSocket
 ```
 
 ## Run locally
+
+> **Türkçe:** Yerelde çalıştırmak için önce signaling sunucusunu, ardından frontend'i başlatın ve uygulamayı iki tarayıcı sekmesinde açın.
 
 ### 1. Start the signaling server
 
@@ -38,6 +42,8 @@ python -m http.server 3000
 Open `http://localhost:3000` in two browser tabs, choose the other peer, and connect.
 
 ## Tech stack
+
+> **Türkçe:** Projede C#/.NET 8, WebSocket, HTML/CSS/JavaScript ve WebRTC teknolojileri kullanılmıştır.
 
 - C# / .NET 8
 - WebSocket (`HttpListener`)
