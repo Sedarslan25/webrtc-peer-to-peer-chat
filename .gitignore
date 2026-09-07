@@ -1,0 +1,25 @@
+# Local settings and sensitive files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Editor and build output
+.vs/
+.vscode/
+.idea/
+[Bb]in/
+[Oo]bj/
+node_modules/
+dist/
+build/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Duplicate coursework delivery archive
+*.zip

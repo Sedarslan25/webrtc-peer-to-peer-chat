@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WebRTC Görüntülü Görüşme</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    header { display: none; }
+
+    #uygulama {
+      width: 100%;
+      height: 100%;
+      max-width: 1200px;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto auto 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .kart {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    #durum-cubugu { grid-column: 1; grid-row: 1; display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 0.9rem; }
+    #uygulama > .kart:nth-child(2) { grid-column: 1; grid-row: 2; }
+    #uygulama > .kart:nth-child(5) { grid-column: 1; grid-row: 3; display: flex; flex-direction: column; overflow: hidden;}
+    
+    #video-alani {
+      grid-column: 2;
+      grid-row: 1 / span 3;
+      position: relative;
+      background: #111827;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      display: flex;
+      height: 100%;
+      min-height: 0;
+    }
+
+    #kontrollar {
+      grid-column: 2;
+      grid-row: 3;
+      align-self: end;
+      justify-self: center;
+      margin-bottom: 24px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(8px);
+      padding: 12px 24px;
+      border-radius: 40px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      display: flex;
+      gap: 12px;
+    }
+
+    .video-cerceve { position: absolute; inset: 0; }
+    
+    #video-alani .video-cerceve:nth-child(2) {
+      z-index: 1;
+    }
+    #video-alani .video-cerceve:nth-child(1) {
+      width: 220px; height: 165px;
+      top: 24px; right: 24px;
+      bottom: auto; left: auto;
+      z-index: 5;
+      border-radius: 12px;
+      border: 3px solid rgba(255,255,255,0.3);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      overflow: hidden;
+      background: #1f2937;
+      transition: all 0.3s;
+    }
+    #video-alani .video-cerceve:nth-child(1):hover {
+      border-color: rgba(255,255,255,0.8);
+    }
+
+    video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .video-etiket { display: none; }
+
+    .video-bos {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #94a3b8; font-size: 0.95rem; font-weight: 500;
+    }
+    #video-alani .video-cerceve:nth-child(1) .video-bos { font-size: 0.75rem; }
+
+    .btn {
+      border: none; border-radius: 8px; padding: 10px 16px; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;
+    }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .btn-ana { background: var(--primary); color: white; }
+    .btn-ana:hover:not(:disabled) { background: var(--primary-hover); }
+    
+    .btn-kirmizi { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+    .btn-kirmizi:hover:not(:disabled) { background: #fecaca; }
+
+    .btn-koyu { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .btn-koyu:hover:not(:disabled) { background: #e2e8f0; }
+
+    .btn-aktif { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0;}
+
+    select, input[type="text"] {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.9rem; outline: none; background: #f8fafc; color: var(--text);
+    }
+    select:focus, input[type="text"]:focus { border-color: var(--primary); background: white; }
+
+    #baglanti-satirı { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;}
+    #baglanti-satirı select { flex: 1; min-width: 120px; }
+    #baglanti-etiketi { font-weight: 600; font-size: 0.85rem; color: var(--text-muted); }
+
+    #mesaj-alani {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 12px; min-height: 0; padding-right: 4px;
+    }
+    #mesaj-alani::-webkit-scrollbar { width: 6px; }
+    #mesaj-alani::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    
+    .mesaj { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.4; word-break: break-word; }
+    .mesaj.ben { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; }
+    .mesaj.karsi { align-self: flex-start; background: #f1f5f9; color: var(--text); border-bottom-left-radius: 2px; }
+    .mesaj.sistem { align-self: center; background: transparent; color: var(--text-muted); font-size: 0.75rem; text-align: center; margin: 4px 0;}
+    .gonderen { font-size: 0.7rem; opacity: 0.8; margin-bottom: 4px; font-weight: 600; }
+    
+    #mesaj-gonderme { display: flex; gap: 8px; }
+
+    #durum-noktasi { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; transition: 0.3s; flex-shrink: 0; }
+    #durum-noktasi.bagli { background: #10b981; }
+    #durum-noktasi.baglaniyor { background: #f59e0b; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+    
+    #kim-oldugum { margin-left: auto; font-size: 0.8rem; font-weight: 600; color: var(--primary); background: #dbeafe; padding: 4px 10px; border-radius: 12px; }
+
+    footer { display: none; }
+
+    @media (max-width: 900px) {
+      body { height: auto; overflow: auto; padding: 10px; }
+      #uygulama { height: auto; grid-template-columns: 1fr; grid-template-rows: auto auto 400px auto; gap: 12px; }
+      #video-alani { grid-column: 1; grid-row: 3; height: auto; min-height: 400px; }
+      #kontrollar { grid-column: 1; grid-row: 3; margin-bottom: 20px;}
+      #durum-cubugu { grid-column: 1; grid-row: 1; margin-bottom: 0;}
+      #uygulama > .kart:nth-child(2) { grid-column: 1; grid-row: 2; margin-bottom: 0;}
+      #uygulama > .kart:nth-child(5) { grid-column: 1; grid-row: 4; overflow: visible;}
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>WebRTC Canlı Görüşme</h1>
+  <p>Tarayıcıdan tarayıcıya gerçek zamanlı iletişim</p>
+</header>
+
+<div id="uygulama">
+
+  <!-- Durum çubuğu -->
+  <div class="kart" id="durum-cubugu">
+    <div id="durum-noktasi"></div>
+    <span id="durum-yazisi">Sunucuya bağlanılıyor...</span>
+    <span id="kim-oldugum" style="display:none"></span>
+  </div>
+
+  <!-- Bağlantı paneli -->
+  <div class="kart">
+    <p id="baglanti-etiketi">Görüşmek istediğin kullanıcıyı seç:</p>
+    <div id="baglanti-satirı">
+      <select id="kullanici-listesi">
+        <option value="">— Kullanıcı bekleniyor —</option>
+      </select>
+      <button class="btn btn-ana" id="btn-ara" disabled onclick="aramaBaslat()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.12 2.18 2 2 0 012.1 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
+        Ara
+      </button>
+      <button class="btn btn-kirmizi" id="btn-kapat" disabled onclick="aramaKapat()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.68 13.31a16 16 0 006.01 6.01l2.21-2.21a1 1 0 011.11-.21 11.72 11.72 0 004.65 1.04 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.72 11.72 0 001.04 4.65 1 1 0 01-.21 1.11l-2.21 2.21M22.5 1.5l-21 21"/></svg>
+        Kapat
+      </button>
+    </div>
+  </div>
+
+  <!-- Video ekranları -->
+  <div id="video-alani">
+    <div class="video-cerceve">
+      <div class="video-bos" id="yerel-bos">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        Kamera kapalı
+      </div>
+      <video id="yerel-video" autoplay muted playsinline></video>
+      <div class="video-etiket">Sen</div>
+    </div>
+    <div class="video-cerceve">
+      <div class="video-bos" id="uzak-bos">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Bağlantı bekleniyor
+      </div>
+      <video id="uzak-video" autoplay playsinline></video>
+      <div class="video-etiket">Karşı Taraf</div>
+    </div>
+  </div>
+
+  <!-- Kamera / Mikrofon kontrolleri -->
+  <div id="kontrollar">
+    <button class="btn btn-koyu" id="btn-kamera" onclick="kameraAcKapat()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      Kamera Aç
+    </button>
+    <button class="btn btn-koyu" id="btn-ekran" onclick="ekranPaylas()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Ekran Paylaş
+    </button>
+    <button class="btn btn-koyu" id="btn-mikrofon" disabled onclick="mikrofonAcKapat()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      Mikrofon Açık
+    </button>
+  </div>
+
+  <!-- Metin sohbeti -->
+  <div class="kart">
+    <div id="mesaj-alani">
+      <div class="mesaj sistem">Kameranızı açın ve bir kullanıcı seçerek aramayı başlatın.</div>
+    </div>
+    <div id="mesaj-gonderme">
+      <input type="text" id="mesaj-girisi" placeholder="Mesajınızı yazın..." disabled
+             onkeydown="if(event.key==='Enter') mesajGonder()" />
+      <button class="btn btn-ana" id="btn-gonder" disabled onclick="mesajGonder()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Gönder
+      </button>
+    </div>
+  </div>
+
+  <footer>
+    <span>getUserMedia</span>
+    <span>RTCPeerConnection</span>
+    <span>RTCDataChannel</span>
+    &nbsp;· Chrome ve Firefox desteklenir
+  </footer>
+
+</div>
+
+<script>
+// ─── Yapılandırma ─────────────────────────────────────────────────────────────
+const SUNUCU_URL = 'ws://localhost:8080/';
+const ICE_SUNUCULARI = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
+
+// ─── Durum ───────────────────────────────────────────────────────────────────
+let ws, benimId = null, hedefId = null;
+let pc = null, veriKanali = null;
+let yerelAkim = null;
+let mikrofonAcik = true;
+
+// ─── Signaling Sunucusuna Bağlan ─────────────────────────────────────────────
+function sunucuyaBaglan() {
+  durumGuncelle('baglaniyor', 'Sunucuya bağlanılıyor...');
+  ws = new WebSocket(SUNUCU_URL);
+
+  ws.onopen = () => durumGuncelle('baglaniyor', 'Bağlandı, kimlik bekleniyor...');
+
+  ws.onmessage = async (olay) => {
+    const mesaj = JSON.parse(olay.data);
+
+    switch (mesaj.type) {
+      case 'welcome':
+        benimId = mesaj.clientId;
+        const kimEleman = document.getElementById('kim-oldugum');
+        kimEleman.textContent = 'Sen: ' + benimId;
+        kimEleman.style.display = 'inline';
+        durumGuncelle('bagli', 'Sunucuya bağlandı');
+        break;
+
+      case 'peer-list':
+        mesaj.peers.forEach(kullanicıEkle);
+        break;
+
+      case 'peer-joined':
+        kullanicıEkle(mesaj.peerId);
+        sistemMesaji(mesaj.peerId + ' bağlandı');
+        break;
+
+      case 'peer-left':
+        kullanicıCikar(mesaj.peerId);
+        sistemMesaji(mesaj.peerId + ' bağlantıyı kesti');
+        if (mesaj.peerId === hedefId) aramaKapat();
+        break;
+
+      case 'offer':
+        await gelenTeklifiIsle(mesaj);
+        break;
+
+      case 'answer':
+        await gelenCevabiIsle(mesaj);
+        break;
+
+      case 'candidate':
+        await gelenAdayiIsle(mesaj);
+        break;
+    }
+  };
+
+  ws.onclose = () => {
+    durumGuncelle('', 'Bağlantı kesildi, yeniden deneniyor...');
+    setTimeout(sunucuyaBaglan, 3000);
+  };
+}
+
+function sinyalGonder(nesne) {
+  ws.send(JSON.stringify(nesne));
+}
+
+// ─── Kamera, Ekran ve Mikrofon ────────────────────────────────────────────────
+function akimiDurdur() {
+  if (yerelAkim) {
+    yerelAkim.getTracks().forEach(t => t.stop());
+    yerelAkim = null;
+  }
+  document.getElementById('yerel-video').srcObject = null;
+  document.getElementById('yerel-bos').style.display = 'flex';
+  
+  const btnKamera = document.getElementById('btn-kamera');
+  btnKamera.className = 'btn btn-koyu';
+  btnKamera.innerHTML = svgVideo() + ' Kamera Aç';
+
+  const btnEkran = document.getElementById('btn-ekran');
+  if (btnEkran) {
+    btnEkran.className = 'btn btn-koyu';
+    btnEkran.innerHTML = svgEkran() + ' Ekran Paylaş';
+  }
+
+  document.getElementById('btn-mikrofon').disabled = true;
+  document.getElementById('btn-ara').disabled = true;
+}
+
+async function kameraAcKapat() {
+  const buton = document.getElementById('btn-kamera');
+
+  if (yerelAkim && buton.classList.contains('btn-aktif')) {
+    akimiDurdur();
+    return;
+  }
+
+  if (yerelAkim) akimiDurdur(); // Ekran paylaşımdaysa önce durdur
+
+  try {
+    yerelAkim = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+    const yerelVideo = document.getElementById('yerel-video');
+    yerelVideo.srcObject = yerelAkim;
+    document.getElementById('yerel-bos').style.display = 'none';
+
+    buton.className = 'btn btn-aktif';
+    buton.innerHTML = svgVideo() + ' Kamera Açık';
+    document.getElementById('btn-mikrofon').disabled = false;
+    document.getElementById('btn-ara').disabled = false;
+    sistemMesaji('Kamera ve mikrofon başarıyla açıldı');
+    
+    baglantidakiIziGuncelle();
+  } catch (hata) {
+    sistemMesaji('Kamera erişimi reddedildi: ' + hata.message);
+    alert('Kamera ve mikrofon erişimine izin verilmedi.\n\n' + hata.message);
+  }
+}
+
+async function ekranPaylas() {
+  const buton = document.getElementById('btn-ekran');
+
+  if (yerelAkim && buton.classList.contains('btn-aktif')) {
+    akimiDurdur();
+    return;
+  }
+
+  if (yerelAkim) akimiDurdur(); // Kamera açıksa önce durdur
+
+  try {
+    // getDisplayMedia ekran paylaşımını başlatır
+    yerelAkim = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+
+    const yerelVideo = document.getElementById('yerel-video');
+    yerelVideo.srcObject = yerelAkim;
+    document.getElementById('yerel-bos').style.display = 'none';
+
+    buton.className = 'btn btn-aktif';
+    buton.innerHTML = svgEkran() + ' Ekran Paylaşılıyor';
+    document.getElementById('btn-mikrofon').disabled = false;
+    document.getElementById('btn-ara').disabled = false;
+    sistemMesaji('Ekran paylaşımı başlatıldı');
+
+    // Tarayıcının yerleşik "Paylaşımı Durdur" butonuna basılırsa
+    yerelAkim.getVideoTracks()[0].onended = () => {
+      akimiDurdur();
+    };
+
+    baglantidakiIziGuncelle();
+  } catch (hata) {
+    sistemMesaji('Ekran paylaşımı iptal edildi: ' + hata.message);
+  }
+}
+
+function baglantidakiIziGuncelle() {
+  if (pc && yerelAkim) {
+    const videoTrack = yerelAkim.getVideoTracks()[0];
+    const senders = pc.getSenders();
+    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+    if (videoSender && videoTrack) {
+      videoSender.replaceTrack(videoTrack);
+    }
+  }
+}
+
+function mikrofonAcKapat() {
+  if (!yerelAkim) return;
+  const sesIzi = yerelAkim.getAudioTracks()[0];
+  if (!sesIzi) return;
+
+  mikrofonAcik = !mikrofonAcik;
+  sesIzi.enabled = mikrofonAcik;
+
+  const buton = document.getElementById('btn-mikrofon');
+  if (mikrofonAcik) {
+    buton.className = 'btn btn-koyu';
+    buton.innerHTML = svgMikrofon() + ' Mikrofon Açık';
+  } else {
+    buton.className = 'btn btn-kirmizi';
+    buton.innerHTML = svgMikrofonKapali() + ' Mikrofon Kapalı';
+  }
+}
+
+// ─── Arama Başlat ─────────────────────────────────────────────────────────────
+async function aramaBaslat() {
+  const secim = document.getElementById('kullanici-listesi');
+  hedefId = secim.value;
+  if (!hedefId) return alert('Lütfen bir kullanıcı seçin.');
+
+  baglantiOlustur(true);
+
+  const teklif = await pc.createOffer();
+  await pc.setLocalDescription(teklif);
+  sinyalGonder({ to: hedefId, type: 'offer', sdp: teklif.sdp });
+  sistemMesaji('Arama isteği gönderildi: ' + hedefId);
+}
+
+async function gelenTeklifiIsle(mesaj) {
+  hedefId = mesaj.from;
+  sistemMesaji(hedefId + ' sizi arıyor...');
+
+  if (!yerelAkim) {
+    try {
+      yerelAkim = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById('yerel-video').srcObject = yerelAkim;
+      document.getElementById('yerel-bos').style.display = 'none';
+      const kBtn = document.getElementById('btn-kamera');
+      kBtn.className = 'btn btn-aktif';
+      kBtn.innerHTML = svgVideo() + ' Kamera Açık';
+      document.getElementById('btn-mikrofon').disabled = false;
+    } catch(h) {
+      sistemMesaji('Kamera açılamadı: ' + h.message);
+    }
+  }
+
+  baglantiOlustur(false);
+  await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: mesaj.sdp }));
+  const cevap = await pc.createAnswer();
+  await pc.setLocalDescription(cevap);
+  sinyalGonder({ to: hedefId, type: 'answer', sdp: cevap.sdp });
+}
+
+async function gelenCevabiIsle(mesaj) {
+  await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: mesaj.sdp }));
+}
+
+async function gelenAdayiIsle(mesaj) {
+  try {
+    await pc.addIceCandidate(new RTCIceCandidate({
+      candidate: mesaj.candidate,
+      sdpMid: mesaj.sdpMid,
+      sdpMLineIndex: mesaj.sdpMLineIndex
+    }));
+  } catch(h) { console.warn('ICE adayı eklenemedi:', h); }
+}
+
+// ─── RTCPeerConnection ────────────────────────────────────────────────────────
+function baglantiOlustur(baslatanMi) {
+  pc = new RTCPeerConnection(ICE_SUNUCULARI);
+
+  // Yerel video/ses izlerini bağlantıya ekle
+  if (yerelAkim) {
+    yerelAkim.getTracks().forEach(iz => pc.addTrack(iz, yerelAkim));
+  }
+
+  // Karşı tarafın video/sesini al ve göster
+  pc.ontrack = (olay) => {
+    const uzakVideo = document.getElementById('uzak-video');
+    if (uzakVideo.srcObject !== olay.streams[0]) {
+      uzakVideo.srcObject = olay.streams[0];
+      document.getElementById('uzak-bos').style.display = 'none';
+      sistemMesaji('Karşı tarafın görüntüsü bağlandı');
+    }
+  };
+
+  // ICE adaylarını karşı tarafa gönder
+  pc.onicecandidate = (olay) => {
+    if (olay.candidate) {
+      sinyalGonder({
+        to: hedefId,
+        type: 'candidate',
+        candidate: olay.candidate.candidate,
+        sdpMid: olay.candidate.sdpMid,
+        sdpMLineIndex: olay.candidate.sdpMLineIndex
+      });
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') {
+      durumGuncelle('bagli', 'P2P bağlantı kuruldu: ' + hedefId);
+      document.getElementById('btn-kapat').disabled = false;
+      document.getElementById('btn-ara').disabled = true;
+    } else if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+      durumGuncelle('bagli', 'Sunucuya bağlandı');
+      sohbetiKapat();
+      document.getElementById('uzak-video').srcObject = null;
+      document.getElementById('uzak-bos').style.display = 'flex';
+    }
+  };
+
+  // Metin kanalı
+  if (baslatanMi) {
+    veriKanali = pc.createDataChannel('sohbet', { ordered: true });
+    veriKanaliniKur(veriKanali);
+  } else {
+    pc.ondatachannel = (olay) => {
+      veriKanali = olay.channel;
+      veriKanaliniKur(veriKanali);
+    };
+  }
+}
+
+// ─── Veri Kanalı ─────────────────────────────────────────────────────────────
+function veriKanaliniKur(kanal) {
+  kanal.onopen = () => {
+    sistemMesaji('Metin kanalı açıldı, mesaj gönderebilirsiniz');
+    document.getElementById('mesaj-girisi').disabled = false;
+    document.getElementById('btn-gonder').disabled = false;
+  };
+  kanal.onmessage = (olay) => mesajEkle(olay.data, 'karsi', hedefId);
+  kanal.onclose = () => { sistemMesaji('Metin kanalı kapandı.'); sohbetiKapat(); };
+}
+
+function mesajGonder() {
+  const giris = document.getElementById('mesaj-girisi');
+  const metin = giris.value.trim();
+  if (!metin || !veriKanali || veriKanali.readyState !== 'open') return;
+  veriKanali.send(metin);
+  mesajEkle(metin, 'ben', 'Sen');
+  giris.value = '';
+}
+
+function aramaKapat() {
+  if (veriKanali) { veriKanali.close(); veriKanali = null; }
+  if (pc) { pc.close(); pc = null; }
+  hedefId = null;
+  sohbetiKapat();
+  document.getElementById('btn-ara').disabled = !yerelAkim;
+  document.getElementById('btn-kapat').disabled = true;
+  document.getElementById('uzak-video').srcObject = null;
+  document.getElementById('uzak-bos').style.display = 'flex';
+  sistemMesaji('Arama sonlandırıldı.');
+}
+
+// ─── UI Yardımcıları ──────────────────────────────────────────────────────────
+function sohbetiKapat() {
+  document.getElementById('mesaj-girisi').disabled = true;
+  document.getElementById('btn-gonder').disabled = true;
+}
+
+function durumGuncelle(durum, yazi) {
+  document.getElementById('durum-noktasi').className = durum;
+  document.getElementById('durum-yazisi').textContent = yazi;
+}
+
+function mesajEkle(metin, tip, gonderen) {
+  const alan = document.getElementById('mesaj-alani');
+  const div = document.createElement('div');
+  div.className = 'mesaj ' + tip;
+  div.innerHTML = `<div class="gonderen">${gonderen}</div>${htmlKac(metin)}`;
+  alan.appendChild(div);
+  alan.scrollTop = alan.scrollHeight;
+}
+
+function sistemMesaji(metin) {
+  const alan = document.getElementById('mesaj-alani');
+  const div = document.createElement('div');
+  div.className = 'mesaj sistem';
+  div.textContent = metin;
+  alan.appendChild(div);
+  alan.scrollTop = alan.scrollHeight;
+}
+
+function kullanicıEkle(id) {
+  const secim = document.getElementById('kullanici-listesi');
+  if ([...secim.options].some(o => o.value === id)) return;
+  const secsenek = document.createElement('option');
+  secsenek.value = id;
+  secsenek.textContent = id;
+  secim.appendChild(secsenek);
+}
+
+function kullanicıCikar(id) {
+  const secim = document.getElementById('kullanici-listesi');
+  const secsenek = [...secim.options].find(o => o.value === id);
+  if (secsenek) secsenek.remove();
+}
+
+function htmlKac(metin) {
+  return metin.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function svgVideo() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`;
+}
+function svgEkran() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+}
+function svgMikrofon() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+}
+function svgMikrofonKapali() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+}
+
+// ─── Başlat ───────────────────────────────────────────────────────────────────
+sunucuyaBaglan();
+</script>
+</body>
+</html>
